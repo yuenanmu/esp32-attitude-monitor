@@ -1,0 +1,21 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+    version: 6.1.0
+  waveshare/qmi8658:
+    component_hash: b8cfbcc4147a4fbb8a5cc95c683c587dbdbe5a633f0cf5995dad02ac79cc665a
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3.2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.0.2
+direct_dependencies:
+- idf
+- waveshare/qmi8658
+manifest_hash: 0fdffd479591e2b83b6e5d44e3620ee8342e0dc86e0b40d15d6bd5707652255a
+target: esp32s3
+version: 3.0.0

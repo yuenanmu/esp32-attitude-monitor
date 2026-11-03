@@ -1,0 +1,15 @@
+# 官方参考工程
+/references/04_QMI8658/
+
+# ESP-IDF 构建产物
+/build/
+/firmware/build/
+
+# 编辑器和开发环境
+/.vscode/
+/firmware/.vscode/
+/firmware/.devcontainer/
+
+# Python 缓存
+__pycache__/
+*.pyc
