@@ -2,6 +2,7 @@
 #include "board_i2c.hpp"
 #include "imu.hpp"
 #include "imu_task.hpp"
+#include "comm.hpp"
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -24,5 +25,9 @@ extern "C" void app_main(void)
     // 3. 创建IMU定时读取任务
     ESP_ERROR_CHECK(
         imu_sampling_start(&imu)
+    );
+    // 4. 创建串口通信任务
+    ESP_ERROR_CHECK(
+        comm_start()
     );
 }
