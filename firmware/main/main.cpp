@@ -3,6 +3,7 @@
 #include "imu.hpp"
 #include "imu_task.hpp"
 #include "comm.hpp"
+#include "history.hpp"
 
 #include "esp_log.h"
 #include "esp_err.h"
@@ -21,7 +22,10 @@ extern "C" void app_main(void)
     ESP_ERROR_CHECK(
         imu.init(bus_handle)
     );
-
+    ESP_ERROR_CHECK(
+        history_init()
+    );
+    history_self_test();
     // 3. 创建IMU定时读取任务
     ESP_ERROR_CHECK(
         imu_sampling_start(&imu)
