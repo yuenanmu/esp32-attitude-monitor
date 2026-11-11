@@ -142,7 +142,7 @@ esp_err_t history_copy_after(
 
     // TODO 4.7：
     // 根据第 5 步规则填写 gap_before_batch。
-    batch.gap_before_batch = records[oldest_index].seq > after_seq;
+    batch.gap_before_batch = batch.count > 0 && batch.info.oldest_seq - 1 > after_seq;
 
     return ESP_OK;
 }
@@ -205,12 +205,11 @@ void history_self_test()
         ESP_LOGE(TAG, "history_copy_after failed: %s", esp_err_to_name(err));
         return;
     }
-    if (output[11].seq == 11) {
-        if (batch.gap_before_batch) {
-            ESP_LOGI(TAG, "history_self_test: PASS (no gap)");
-        } else {
-            ESP_LOGE(TAG, "history_self_test: FAIL (unexpected gap)");
-        }
+    bool pass = batch.count > 0 && output[0].seq == 11 && !batch.gap_before_batch;
+    if (pass) {
+        ESP_LOGI(TAG, "history_self_test: PASS (after_seq=10)");
+    } else {
+        ESP_LOGE(TAG, "history_self_test: FAIL (after_seq=10)");
     }
     // TODO 6.5：
     // 连续两次用相同 after_seq 查询。
