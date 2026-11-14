@@ -5,6 +5,7 @@
 
 #include "imu_task.hpp"
 #include "imu.hpp"
+#include "gyro_calibration.hpp"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -85,12 +86,14 @@ uint64_t next_seq = 1;
 
 SamplingStats stats{};
 bool report_stats = false;
+GyroCalibration calibration;
 SampleRecord record{};
 uint64_t history_write_errors = 0;
+// 采样任务，读取 IMU 并写入 History
 static void imu_task(void* arg)
 {
     Imu* imu = static_cast<Imu*>(arg);
-
+    
     while (true) {
 
         // 等待 Timer 通知
@@ -121,10 +124,24 @@ static void imu_task(void* arg)
             continue;
         }
         if (ready) {
+            // 进行陀螺仪角速度校准
+            if (!calibration.ready()) {
+                calibration.add(data);
+
+                if (calibration.ready()) {
+                    ESP_LOGI(TAG, "Gyro calibration complete");
+                }
+
+                // 校准样本暂不写进业务历史缓存。
+                continue;
+            }
+
+            ImuData corrected = calibration.correct(data);
+
             // 更新采样记录
             record.seq = next_seq++;
             record.t_us = esp_timer_get_time();
-            record.imu = data;
+            record.imu = corrected;
             // 统计
             update_stats(stats, record);
 
@@ -138,15 +155,15 @@ static void imu_task(void* arg)
             // 每10次打印一次，避免日志影响采样
             static uint32_t count = 0;
 
-            if (++count % 10 == 0) {
-                // ESP_LOGI(TAG,
-                //     "ACC: %.3f %.3f %.3f",
-                //     data.ax, data.ay, data.az);
+            if (++count % 50 == 0) {
+                ESP_LOGI(TAG,
+                    "ACC: %.3f %.3f %.3f",
+                    data.ax, data.ay, data.az);
             }
             if (record.seq % 100 == 0) {
-                ESP_LOGI(TAG,
-                "seq: %" PRIu64 ", t_us: %" PRId64,
-                record.seq, record.t_us);
+                // ESP_LOGI(TAG,
+                // "seq: %" PRIu64 ", t_us: %" PRId64,
+                // record.seq, record.t_us);
             }
 
             // TODO:
