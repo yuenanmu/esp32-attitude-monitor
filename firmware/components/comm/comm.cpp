@@ -46,6 +46,7 @@ void send_samples(uint64_t after_seq, size_t limit)
     }
 
     // history_copy_after 返回时已经释放缓存锁。
+    // 发送 BEGIN 行，包含批次信息。
     std::printf(
         "BEGIN %" PRIu64 " %zu %" PRIu64
         " %" PRIu64 " %" PRIu64 " %u\n",
@@ -58,20 +59,11 @@ void send_samples(uint64_t after_seq, size_t limit)
     );
 
     uint64_t last_seq = after_seq;
-
+    // 发送每条记录的 DATA 行。
     for (size_t i = 0; i < batch.count; ++i) {
         const SampleRecord& record = output[i];
 
-        // TODO 3.1
         // 用一次 printf 输出一条完整 DATA 行。
-        //
-        // 格式参考：
-        // "DATA %" PRIu64 " %" PRId64
-        // " %.6f %.6f %.6f %.6f %.6f %.6f\n"
-        //
-        // 依次填入：
-        // record.seq、record.t_us
-        // record.imu.ax/ay/az/gx/gy/gz
         std::printf(
             "DATA %" PRIu64 " %" PRIu64
             " %.6f %.6f %.6f %.6f %.6f %.6f\n",
@@ -79,28 +71,73 @@ void send_samples(uint64_t after_seq, size_t limit)
             record.imu.ax, record.imu.ay, record.imu.az,
             record.imu.gx, record.imu.gy, record.imu.gz
         );
-        // TODO 3.2
+
         // 更新 last_seq，记录本批最后发送的序号。
         last_seq = record.seq;
     }
-
+    // 发送 END 行，表示本批次发送完毕。
     std::printf("END %" PRIu64 "\n", last_seq);
     std::fflush(stdout);
 }
+void send_attitude(uint64_t after_seq, size_t limit)
+{
+    // TODO 5.1
+    // 调用 history_copy_after() 复制一批记录。
+    static SampleRecord output[HISTORY_BATCH_MAX]; // 缓存
+    HistoryBatch batch{};   // 批次信息
+    esp_err_t err = history_copy_after(
+        after_seq,
+        output,
+        limit,
+        batch
+    );
+    if (err != ESP_OK) { 
+        send_line("ERR HISTORY_READ_FAILED");
+        return;
+    }
 
+    // TODO 5.2
+    // 使用已有 BEGIN 格式发送批次信息。
+    printf(
+        "BEGIN %" PRIu64 " %zu %" PRIu64
+        " %" PRIu64 " %" PRIu64 " %u\n",
+        after_seq,
+        batch.count,
+        batch.info.oldest_seq,
+        batch.info.latest_seq,
+        batch.info.overwrite_count,
+        batch.gap_before_batch ? 1U : 0U
+    );
+    // TODO 5.3
+    // 一条记录发送一行 ATT。
+    //
+    // "ATT %" PRIu64 " %" PRId64 " %.3f %.3f %.3f\n"
+    uint64_t last_seq = after_seq;
+    for (size_t i = 0; i < batch.count; ++i) {
+        printf(
+            "ATT %" PRIu64 " %" PRId64 " %.3f %.3f %.3f\n",
+            output[i].seq,
+            output[i].t_us,
+            output[i].attitude.roll_deg,
+            output[i].attitude.pitch_deg,
+            output[i].attitude.yaw_deg
+        );
+        last_seq = output[i].seq;
+    }
+    // TODO 5.4
+    // 发送 END，并刷新 stdout。
+    printf("END %" PRIu64 "\n", last_seq);
+    std::fflush(stdout);
+}
 // 处理一条完整命令。
 // 收到这里时，末尾的换行已经去掉。
 void handle_command(const char* command)
 {
-    // TODO 1：
-    // 判断 command 是否等于 "PING"。
-    // 提示：std::strcmp(command, "PING") == 0
-    //
-    // 如果匹配：
-    //   调用 send_line() 返回 "PONG"；
-    //   然后 return，避免继续执行下面的错误响应。
+    // 打印命令，方便调试
     printf("Received command: %s\n", command); // 调试输出，显示收到的命令
     std::fflush(stdout); // 确保调试输出立即显示
+
+    // 处理 PING
     if (std::strcmp(command, "PING") == 0) {
         send_line("PONG");
         return;
@@ -111,7 +148,7 @@ void handle_command(const char* command)
     char limit_text[128]{};
     char extra[128]{};
 
-    int fields = std::sscanf( // 指令+参数（空格分隔参数）
+    int fields = std::sscanf( // command参数拆分成为：指令+参数（空格分隔参数）
         command,
         "%127s %127s %127s %127s",
         verb,
@@ -132,6 +169,20 @@ void handle_command(const char* command)
         }
         // 从history缓存中获取 after_seq 之后的记录，最多 limit 条。并且发送到 stdout。
         send_samples(after_seq, limit);
+        return;
+    }
+    if (std::strcmp(verb, "GET_ATTITUDE") == 0) {
+        uint64_t after_seq = 0;
+        uint64_t limit = 0;
+        // 解析指令，将 after_text 和 limit_text 转换为整数参数。
+        if (fields != 3 || !parse_uint64(after_text, after_seq)
+            || !parse_uint64(limit_text, limit)
+            || limit < 1 || limit > HISTORY_BATCH_MAX) {
+            send_line("ERR INVALID_ARGUMENT");
+            return;
+        }
+        // 从history缓存中获取 after_seq 之后的记录，最多 limit 条。并且发送到 stdout。
+        send_attitude(after_seq, limit);
         return;
     }
 

@@ -8,14 +8,14 @@
 
 constexpr size_t HISTORY_CAPACITY = 1024;
 constexpr size_t HISTORY_BATCH_MAX = 32;
-
+// 历史信息
 struct HistoryInfo {
     size_t size{};
     uint64_t oldest_seq{};
     uint64_t latest_seq{};
     uint64_t overwrite_count{};
 };
-
+// 批量获取记录
 struct HistoryBatch {
     HistoryInfo info{};
     size_t count{};
