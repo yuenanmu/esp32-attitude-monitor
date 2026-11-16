@@ -6,6 +6,7 @@
 #include "imu_task.hpp"
 #include "imu.hpp"
 #include "gyro_calibration.hpp"
+#include "attitude.hpp"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -89,11 +90,15 @@ bool report_stats = false;
 GyroCalibration calibration;
 SampleRecord record{};
 uint64_t history_write_errors = 0;
+// 姿态估计器
+AttitudeEstimator estimator;
+
 // 采样任务，读取 IMU 并写入 History
 static void imu_task(void* arg)
 {
     Imu* imu = static_cast<Imu*>(arg);
-    
+    // 初始化姿态估计器
+    estimator.reset(100.0f);
     while (true) {
 
         // 等待 Timer 通知
@@ -137,11 +142,14 @@ static void imu_task(void* arg)
             }
 
             ImuData corrected = calibration.correct(data);
+            int64_t now_us = esp_timer_get_time();
+            AttitudeAngles attitude{};
 
             // 更新采样记录
             record.seq = next_seq++;
-            record.t_us = esp_timer_get_time();
+            record.t_us = now_us;
             record.imu = corrected;
+            record.attitude = estimator.update(corrected, now_us, attitude) ? attitude : AttitudeAngles{};
             // 统计
             update_stats(stats, record);
 
@@ -164,6 +172,9 @@ static void imu_task(void* arg)
                 // ESP_LOGI(TAG,
                 // "seq: %" PRIu64 ", t_us: %" PRId64,
                 // record.seq, record.t_us);
+                ESP_LOGI(TAG,
+                "RPY deg: %.2f %.2f %.2f",
+                record.attitude.roll_deg, record.attitude.pitch_deg, record.attitude.yaw_deg);
             }
 
             // TODO:
