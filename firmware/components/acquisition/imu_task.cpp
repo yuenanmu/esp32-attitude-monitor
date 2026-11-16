@@ -145,11 +145,16 @@ static void imu_task(void* arg)
             int64_t now_us = esp_timer_get_time();
             AttitudeAngles attitude{};
 
+            if (!estimator.update(corrected, now_us, attitude)) {
+                continue;
+            }
+
             // 更新采样记录
             record.seq = next_seq++;
             record.t_us = now_us;
             record.imu = corrected;
-            record.attitude = estimator.update(corrected, now_us, attitude) ? attitude : AttitudeAngles{};
+            record.attitude = attitude;
+            // record.attitude = estimator.update(corrected, now_us, attitude) ? attitude : AttitudeAngles{};
             // 统计
             update_stats(stats, record);
 
