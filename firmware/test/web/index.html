@@ -56,6 +56,21 @@
         <div class="legend"><span class="roll"><i></i>Roll</span><span class="pitch"><i></i>Pitch</span><span class="yaw"><i></i>Yaw</span></div>
       </section>
     </div>
+    <section class="panel controls" aria-labelledby="controls-title">
+      <div class="panel-head">
+        <div><h2 id="controls-title">设备设置</h2><p>当前采样率：<strong id="device-rate">—</strong></p></div>
+      </div>
+      <div class="control-actions">
+        <button id="calibrate" class="outline" type="button" disabled>重新校准</button>
+        <label for="sample-rate">目标采样率</label>
+        <select id="sample-rate" disabled>
+          <option value="100">100 Hz</option>
+          <option value="200">200 Hz</option>
+        </select>
+        <button id="apply-rate" class="outline" type="button" disabled>应用采样率</button>
+      </div>
+      <p id="control-feedback" role="status">等待开发板连接。重新校准时请保持开发板静止。</p>
+    </section>
     <section class="panel stats" aria-label="数据接收状态">
       <div><span>最新序号</span><strong id="seq">—</strong></div>
       <div><span>累计收到</span><strong id="received">—</strong></div>

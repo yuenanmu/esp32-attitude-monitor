@@ -5,11 +5,16 @@ const axes = ["roll", "pitch", "yaw"];
 const integer = new Intl.NumberFormat("zh-CN");
 const points = [];
 const windowUs = 10_000_000;
-const pollMs = 250;
+const pollMs = 150;
 let mode = "live";
 let modeEpoch = 0;
 let lastSample = null;
 let pose = null;
+let controlState = null;
+let submitting = false;
+let awaitingId = null;
+let controlRevision = 0;
+let submitError = "";
 
 import("./pose.js").then(({ createPoseView }) => {
   pose = createPoseView(el("pose"), el("reset-view"));
@@ -106,6 +111,80 @@ function renderStats(state) {
     ? new Date(state.last_received_at * 1000).toLocaleTimeString("zh-CN", { hour12: false }) : "—";
 }
 
+function renderControls() {
+  const device = controlState?.device_status;
+  const operation = controlState?.control;
+  if (awaitingId !== null && operation?.id >= awaitingId) awaitingId = null;
+  const live = mode === "live";
+  const connected = live && Boolean(controlState?.connected);
+  const busy = submitting || awaitingId !== null || operation?.phase === "queued" ||
+    operation?.phase === "running" || device?.pending || device?.mode === "CALIBRATING";
+  for (const id of ["calibrate", "sample-rate", "apply-rate"]) {
+    el(id).disabled = !connected || Boolean(busy);
+  }
+  el("device-rate").textContent = connected && device ? `${device.rate_hz} Hz` : "—";
+
+  let message = "重新校准时请保持开发板静止。";
+  let tone = "";
+  const name = operation?.action === "calibrate"
+    ? "陀螺仪校准" : `设置采样率为 ${operation?.rate_hz} Hz`;
+  if (!live) {
+    message = "演示模式不能控制开发板。";
+  } else if (!connected) {
+    message = operation?.phase === "unknown" ? "设备已断开，操作结果未确认。" : "等待开发板连接。";
+  } else if (submitting) {
+    message = "正在提交请求…";
+  } else if (awaitingId !== null) {
+    message = "请求已提交，等待设备处理。";
+  } else if (submitError) {
+    message = submitError;
+    tone = "warn";
+  } else if (operation?.phase === "queued") {
+    message = `${name}：已排队。`;
+  } else if (device?.mode === "CALIBRATING") {
+    message = "正在校准，请保持开发板静止。";
+  } else if (operation?.phase === "running") {
+    message = `${name}：等待设备确认。`;
+  } else if (operation?.phase === "succeeded") {
+    message = `${name}成功。`;
+    tone = "live";
+  } else if (operation?.phase === "failed" || operation?.phase === "unknown") {
+    const result = operation.phase === "failed" ? "失败" : "结果未确认";
+    message = `${name}${result}${operation.detail ? `：${operation.detail}` : "。"}`;
+    tone = "warn";
+  }
+  const feedback = el("control-feedback");
+  if (feedback.textContent !== message) feedback.textContent = message;
+  feedback.dataset.tone = tone;
+}
+
+async function submitControl(payload) {
+  if (submitting || mode !== "live" || !controlState?.connected) return;
+  submitting = true;
+  submitError = "";
+  renderControls();
+  try {
+    const response = await fetch("/api/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(3000),
+    });
+    const body = await response.json();
+    if (response.status === 202) {
+      awaitingId = body.id;
+      controlRevision++;
+    } else {
+      submitError = body.error || `提交失败（HTTP ${response.status}）。`;
+    }
+  } catch {
+    submitError = "请求结果未确认，请先查看设备状态。";
+  } finally {
+    submitting = false;
+    renderControls();
+  }
+}
+
 function switchMode(nextMode) {
   if (mode === nextMode) return;
   mode = nextMode;
@@ -120,6 +199,8 @@ function switchMode(nextMode) {
   el("connection").title = "";
   setStatus(mode === "demo" ? "演示模式 · 模拟数据" : "等待设备", mode === "demo" ? "demo" : "idle");
   el("source-note").textContent = mode === "demo" ? "演示模式 · 模拟数据" : "设备数据 · USB → Python → Web";
+  if (mode === "demo") controlState = null;
+  renderControls();
 }
 
 function demoSample() {
@@ -135,6 +216,7 @@ function demoSample() {
 
 async function poll() {
   const epoch = modeEpoch;
+  const revision = controlRevision;
   try {
     if (mode === "demo") {
       renderSample(demoSample());
@@ -144,6 +226,14 @@ async function poll() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const state = await response.json();
     if (epoch !== modeEpoch) return;
+    if (revision === controlRevision) {
+      if (awaitingId !== null && (!state.control || state.control.id < awaitingId)) {
+        submitError = "找不到本次请求，请检查桥接是否已重启。";
+        awaitingId = null;
+      }
+      controlState = state;
+      renderControls();
+    }
     renderStats(state);
     if (!state.connected) {
       setStatus(lastSample ? "设备未连接 · 保留旧值" : "设备未连接", "warn");
@@ -164,6 +254,9 @@ async function poll() {
     renderLatest(state.latest, renderSample);
   } catch (error) {
     if (epoch === modeEpoch) {
+      controlState = null;
+      awaitingId = null;
+      renderControls();
       setStatus(lastSample ? "桥接不可用 · 保留旧值" : "桥接不可用", "warn");
       el("connection").title = error.message;
     }
@@ -174,5 +267,9 @@ async function poll() {
 
 el("demo-mode").addEventListener("click", () => switchMode("demo"));
 el("live-mode").addEventListener("click", () => switchMode("live"));
+el("calibrate").addEventListener("click", () => submitControl({ action: "calibrate" }));
+el("apply-rate").addEventListener("click", () => submitControl({
+  action: "set_rate", rate_hz: Number(el("sample-rate").value),
+}));
 new ResizeObserver(drawChart).observe(el("trend"));
 poll();

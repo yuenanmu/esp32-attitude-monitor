@@ -70,6 +70,17 @@ i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; backgrou
 #trend { width: 100%; height: 100%; display: block; }
 .legend { height: 44px; display: flex; justify-content: center; gap: 18px; align-items: center; color: var(--muted); font-size: 14px; }
 .legend span { display: flex; gap: 6px; }
+.controls { margin-top: 16px; }
+.controls .panel-head { padding-bottom: 10px; }
+.controls strong { color: var(--cyan); }
+.control-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 0 18px; }
+.control-actions button { color: var(--ink); background: #182534; }
+.control-actions label { color: var(--muted); font-size: 14px; }
+.control-actions select { font: inherit; font-size: 14px; color: var(--ink); background: #0c1420; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; }
+.control-actions select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+#control-feedback { margin: 12px 18px 16px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+#control-feedback[data-tone="warn"] { color: var(--amber); }
+#control-feedback[data-tone="live"] { color: var(--cyan); }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px; }
 .stats div { padding: 12px 18px; display: grid; gap: 5px; }
 .stats div + div { border-left: 1px solid var(--border); }
