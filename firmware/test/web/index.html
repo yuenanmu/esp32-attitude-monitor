@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1018">
+  <title>姿态监控 · ESP32-S3</title>
+  <link rel="stylesheet" href="/web/style.css">
+  <script type="module" src="/web/dashboard.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-inner">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4 27 10v12l-11 6-11-6V10zM5 10l11 6 11-6M16 16v12"/><circle cx="16" cy="16" r="2"/></svg>
+        <div><strong>姿态监控</strong><span>ESP32-S3 / QMI8658</span></div>
+      </div>
+      <div class="mode-picker" aria-label="数据源">
+        <button id="live-mode" type="button" aria-pressed="true">设备数据</button>
+        <button id="demo-mode" type="button" aria-pressed="false">演示模式</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="intro">
+      <div>
+        <p class="eyebrow">IMU TELEMETRY</p>
+        <h1>姿态仪表盘</h1>
+        <p class="subtitle">观察开发板的三轴角度、空间朝向与近期变化。</p>
+      </div>
+      <div id="connection" class="status" data-tone="idle" role="status"><i></i><span id="connection-text">等待设备</span></div>
+    </div>
+    <section class="metrics" aria-label="当前姿态角">
+      <article class="metric roll"><h2><i></i>Roll <small>横滚</small></h2><p><output id="roll">—</output><span>°</span></p><div>绕设备 X 轴</div></article>
+      <article class="metric pitch"><h2><i></i>Pitch <small>俯仰</small></h2><p><output id="pitch">—</output><span>°</span></p><div>绕设备 Y 轴</div></article>
+      <article class="metric yaw"><h2><i></i>Yaw <small>偏航</small></h2><p><output id="yaw">—</output><span>°</span></p><div>绕设备 Z 轴 · 相对航向</div></article>
+    </section>
+    <div class="views">
+      <section class="panel">
+        <div class="panel-head">
+          <div><h2>三维姿态</h2><p>拖动旋转视角，滚轮缩放</p></div>
+          <button id="reset-view" class="outline" type="button" disabled>重置视角</button>
+        </div>
+        <div class="viewport">
+          <div id="pose" class="pose" aria-label="开发板三维姿态模型"></div>
+          <p id="pose-fallback" class="viewport-message">正在加载 3D 模型…</p>
+          <div class="axis-key"><span class="roll">X</span><span class="pitch">Y</span><span class="yaw">Z</span></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><div><h2>姿态趋势</h2><p>最近 10 秒 · 页面读到的样本</p></div><span class="tag">DEG</span></div>
+        <div class="chart-wrap">
+          <canvas id="trend" role="img" aria-label="Roll、Pitch 和 Yaw 的最近十秒曲线"></canvas>
+          <p id="chart-empty" class="viewport-message">等待两条姿态样本</p>
+        </div>
+        <div class="legend"><span class="roll"><i></i>Roll</span><span class="pitch"><i></i>Pitch</span><span class="yaw"><i></i>Yaw</span></div>
+      </section>
+    </div>
+    <section class="panel stats" aria-label="数据接收状态">
+      <div><span>最新序号</span><strong id="seq">—</strong></div>
+      <div><span>累计收到</span><strong id="received">—</strong></div>
+      <div><span>累计序号缺口</span><strong id="missing">—</strong></div>
+      <div><span>最近接收</span><strong id="last-seen">—</strong></div>
+    </section>
+    <footer><span id="source-note">设备数据 · USB → Python → Web</span><span>六轴 IMU 的偏航可能随时间漂移</span></footer>
+  </main>
+</body>
+</html>
