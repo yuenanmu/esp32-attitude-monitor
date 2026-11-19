@@ -31,16 +31,10 @@ def read_line(port, pending, deadline):
 def parse_begin(line, expected_after):
     fields = line.split()
 
-    # TODO 4.1
-    # 确认共 7 项，第一项为 BEGIN。
-    # 将其余字段转换为 int。
-    # 检查返回的 after_seq 与 expected_after 相同。
-    # 检查 count 在 0～32、gap 为 0 或 1。
-    #
-    # 返回字典，包含：
-    # after、count、oldest、latest、overwrites、gap
+    # 解析 BEGIN 行，返回字典：
     if len(fields) != 7 or fields[0] != "BEGIN":
         raise ValueError("格式错误")
+    
     try:
         after_seq = int(fields[1])
         count = int(fields[2])
@@ -66,14 +60,14 @@ def parse_begin(line, expected_after):
         "oldest": oldest,
         "latest": latest,
         "overwrites": overwrites,
-        "gap": gap
+        "gap": gap  # 表示是否有缺失记录
     }
     
 
-
+# 解析 ATT 行，获取姿态数据的数据字段，并且返回record字典数据
 def parse_record(line):
     fields = line.split()
-
+    # 解析 ATT 行，返回字典：
     if len(fields) != 6 or fields[0] != "ATT":
         raise ValueError("格式错误")
     try:
@@ -147,6 +141,7 @@ def validate_batch(header, records, end_line):
     if end_seq != expected_end:
         raise ValueError("END 序号不正确")
 
+# 通过串口发送GET_ATTITUDE 向ESP32请求批次
 def request_batch(port, pending, after_seq, limit=32):
     command = f"GET_ATTITUDE {after_seq} {limit}\n"
     port.write(command.encode("ascii"))
@@ -167,13 +162,13 @@ def request_batch(port, pending, after_seq, limit=32):
         if line.startswith("BEGIN "):
             if header is not None:
                 raise ValueError("批次尚未结束又收到 BEGIN")
-            header = parse_begin(line, after_seq)
+            header = parse_begin(line, after_seq) # 返回字典,赋值给header
 
         elif line.startswith("ATT "):
             if header is None:
                 raise ValueError("收到 ATT 前没有 BEGIN")
 
-            records.append(parse_record(line))
+            records.append(parse_record(line)) # 返回字典,赋值给records,record数据字段追加进入records
 
             if len(records) > header["count"]:
                 raise ValueError("记录数超过声明值")
