@@ -1,6 +1,7 @@
 #include "comm.hpp"
 #include <cinttypes>
 #include "history.hpp"
+#include "imu_task.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -156,6 +157,67 @@ void handle_command(const char* command)
         limit_text,
         extra
     );
+    if (std::strcmp(command, "CALIBRATE_GYRO") == 0) {
+        
+        uint32_t request_id = 0;
+        esp_err_t err = acquisition_request_calibration(request_id);
+        if (err != ESP_OK) {
+            send_line("ERR CALIBRATION_REQUEST_FAILED");
+            return;
+        }
+        // 输出请求ID，方便调试和跟踪
+        std::printf("CALIBRATION_REQUESTED %" PRIu32 "\n", request_id);
+        std::fflush(stdout);
+
+        return;
+    }
+    if (std::strcmp(command, "GET_STATUS") == 0) {
+        AcquisitionStatus status{};
+
+        if (acquisition_get_status(status) != ESP_OK) {
+            send_line("ERR NOT_READY");
+            return;
+        }
+
+        std::printf(
+            "STATUS %s %" PRIu32 " %" PRIu32 " %u %d\n",
+            status.calibrating ? "CALIBRATING" : "RUNNING",
+            status.rate_hz,
+            status.request_id,
+            status.command_pending ? 1U : 0U,
+            static_cast<int>(status.last_result)
+        );
+
+        std::fflush(stdout);
+        return;
+    }
+    if (std::strcmp(verb, "SET_RATE") == 0) {
+        // 解析参数 hz，必须是 100 或 200。
+        uint64_t hz = 0;
+
+        if (fields != 2 ||
+            !parse_uint64(after_text, hz) ||
+            (hz != 100 && hz != 200)) {
+            send_line("ERR INVALID_ARGUMENT");
+            return;
+        }
+        // 核心函数，请求设置采样率，并返回 request_id。
+        uint32_t request_id = 0; 
+
+        esp_err_t err = acquisition_request_rate(
+            static_cast<uint32_t>(hz),
+            request_id
+        );
+
+        if (err != ESP_OK) {
+            send_line("ERR BUSY_OR_NOT_READY");
+            return;
+        }
+
+        std::printf("QUEUED %" PRIu32 "\n", request_id);
+        std::fflush(stdout);
+        return;
+    }
 
     if (std::strcmp(verb, "GET_SAMPLES") == 0) {
         uint64_t after_seq = 0;
@@ -199,7 +261,7 @@ void comm_task(void* arg)
     bool discarding = false;
 
     while (true) {
-        int ch = std::getchar();
+        int ch = std::getchar(); // 可以从串口或标准输入读取字符，阻塞直到有输入
 
         // 当前没有可读字符时，让出 CPU，稍后继续。
         if (ch == EOF) {
