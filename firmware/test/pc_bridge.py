@@ -5,18 +5,33 @@ import time  # time.time()函数：获取当前时间戳（秒）。
 # 
 from http.server import BaseHTTPRequestHandler #  处理请求
 from http.server import ThreadingHTTPServer # 监听HTTP请求
+from pathlib import Path # 路径处理, 创建路径对象
 
 import serial # serial.Serial() 函数：创建串口对象。打开COM 端口。
 
 from attitude_test import PORT, BAUDRATE, request_batch
 
-# 
+# 静态文件目录
+WEB_DIR = Path(__file__).with_name("web")
+WEB_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/web/style.css": ("style.css", "text/css; charset=utf-8"),
+    "/web/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
+    "/web/student-live.js": ("student-live.js", "text/javascript; charset=utf-8"),
+    "/web/pose.js": ("pose.js", "text/javascript; charset=utf-8"),
+    "/web/vendor/three.module.min.js": (
+        "vendor/three.module.min.js", "text/javascript; charset=utf-8"
+    ),
+}
+
+# 状态锁和停止信号
 state_lock = threading.Lock()
 stop_event = threading.Event()
+
 # 串口写state,HTTP请求读state
 state = {
     "connected": False,
-    "latest": None, # 保存最新数据
+    "latest": None, # 保存最新数据，就是record 姿态数据
     "received_count": 0,
     "missing_count": 0,
     "last_received_at": None, # 保存最新数据接收时间
@@ -109,7 +124,27 @@ def serial_worker():
 # 状态处理
 class StateHandler(BaseHTTPRequestHandler):
     def do_GET(self): # 处理GET请求
-        if self.path != "/api/state":
+
+        # 下面是在处理静态文件
+        # self.path 是浏览器请求的路径，可能带查询参数。
+        path = self.path.split("?", 1)[0] # 例如 "/web/style.css?v=2"：只取第一个 "?" 前面的 "/web/style.css"。
+        if path in WEB_FILES:
+            filename, content_type = WEB_FILES[path]
+            try:
+                # WEB_DIR 是磁盘上的 web 目录；这里的 `/` 是 Path 的路径拼接。
+                body = (WEB_DIR / filename).read_bytes() # 响应体是静态文件内容，是画面
+            except FileNotFoundError:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body) # wfile 是写回客户端的输出流。把文件的字节发给请求它的浏览器。
+            return
+
+        if path != "/api/state":
             self.send_error(404)
             return
 
@@ -122,7 +157,7 @@ class StateHandler(BaseHTTPRequestHandler):
                 snapshot["latest"] = (
                     snapshot["latest"].copy()
                 )
-
+        # 把 record->state->snapshot->body,发送融合数据给浏览器
         body = json.dumps(
             snapshot,
             ensure_ascii=False,
@@ -155,7 +190,8 @@ def main():
     )
     worker.start() # 启动串口线程
 
-    print("http://127.0.0.1:8000/api/state")
+    print("姿态监控：http://127.0.0.1:8000/")
+    print("状态接口：http://127.0.0.1:8000/api/state")
 
     try:
         server.serve_forever() # 启动HTTP服务
