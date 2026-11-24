@@ -2,7 +2,7 @@
 #include "esp_log.h"
 
 static const char *TAG = "IMU";
-
+// 总线句柄调用：imu.init(bus_handle) -> qmi8658_init(&imu_dev_, bus_handle, QMI8658_ADDRESS_HIGH)->configure()
 esp_err_t Imu::init (i2c_master_bus_handle_t bus_handle) {
     if (bus_handle == nullptr) {
         return ESP_ERR_INVALID_ARG;
@@ -28,8 +28,8 @@ esp_err_t Imu::configure() {
         &imu_dev_, QMI8658_GYRO_RANGE_512DPS
     );
     // 设置输出单位
-    qmi8658_set_accel_unit_mps2(&imu_dev_, true);
-    qmi8658_set_gyro_unit_rads(&imu_dev_, true);
+    qmi8658_set_accel_unit_mps2(&imu_dev_, true); // m/s²
+    qmi8658_set_gyro_unit_rads(&imu_dev_, true);  // rad/s
 
     ESP_LOGI(TAG, "QMI8658 initialized");
     return ESP_OK;

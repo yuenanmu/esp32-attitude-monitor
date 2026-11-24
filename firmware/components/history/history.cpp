@@ -76,9 +76,7 @@ esp_err_t history_push(const SampleRecord& record)
         overwrite_count++;
     }
 
-    // TODO 4.3：
-    // write_index 前进一格，到末尾后回到 0。
-    // 提示：使用 % HISTORY_CAPACITY。
+    // 循环写入，更新 write_index。
     write_index = (write_index + 1) % HISTORY_CAPACITY; // 循环写入,范围[0,HISTORY_CAPACITY)
 
     return ESP_OK;
@@ -111,28 +109,14 @@ esp_err_t history_copy_after(
     if (record_count == 0) {
         return ESP_OK;
     }
-    // TODO 4.5：
-    // 计算最旧记录的物理下标：
-    // (write_index + HISTORY_CAPACITY - record_count)
-    //     % HISTORY_CAPACITY
-    //
-    // 最新记录下标：
-    // (write_index + HISTORY_CAPACITY - 1)
-    //     % HISTORY_CAPACITY
-    //
-    // 填写 oldest_seq、latest_seq。
+
+    // 环形缓冲区的oldest 和 latest 记录的下标。
     size_t oldest_index = (write_index + HISTORY_CAPACITY - record_count) % HISTORY_CAPACITY;
     size_t lastest_index = (write_index + HISTORY_CAPACITY - 1) % HISTORY_CAPACITY;
     batch.info.oldest_seq = records[oldest_index].seq;
     batch.info.latest_seq = records[lastest_index].seq;
-    // TODO 4.6：
-    // 从最旧到最新遍历。
-    // 第 i 条记录的物理下标：
-    // (oldest_index + i) % HISTORY_CAPACITY
-    //
-    // 只复制 seq > after_seq 的记录。
-    // 输出满 output_capacity 条就停止。
-    // 更新 batch.count。
+
+    // 将 after_seq 之后的记录复制到 output 中，最多 output_capacity 条。
     for (size_t i = 0; i < record_count && batch.count < output_capacity; i++) {
         size_t index = (oldest_index + i) % HISTORY_CAPACITY;
         if (records[index].seq > after_seq) {
@@ -142,7 +126,7 @@ esp_err_t history_copy_after(
 
     // TODO 4.7：
     // 根据第 5 步规则填写 gap_before_batch。
-    batch.gap_before_batch = batch.count > 0 && batch.info.oldest_seq - 1 > after_seq;
+    batch.gap_before_batch = batch.count > 0 && batch.info.oldest_seq - 1 > after_seq;  // 是否存在间隙（数据丢失）
 
     return ESP_OK;
 }

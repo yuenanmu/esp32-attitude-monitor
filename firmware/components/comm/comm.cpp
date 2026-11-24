@@ -26,7 +26,7 @@ void send_line(const char* text)
     std::printf("%s\n", text); // 调用者传入的 text 不需要自带换行。
     std::fflush(stdout); // 刷新 stdout
 }
-
+// 通过history_copy_after() 赋值一批记录给自定义的batch、output变量。
 void send_samples(uint64_t after_seq, size_t limit)
 {
     // 只由当前通信任务使用。
@@ -127,11 +127,13 @@ void send_attitude(uint64_t after_seq, size_t limit)
     }
     // TODO 5.4
     // 发送 END，并刷新 stdout。
-    printf("END %" PRIu64 "\n", last_seq);
+    printf("END %" PRIu64 "\n", last_seq); // 最后的输出的ATT序号
     std::fflush(stdout);
 }
 // 处理一条完整命令。
 // 收到这里时，末尾的换行已经去掉。
+
+// 通过 std::sscanf() 拆分命令，识别 verb 和参数 + parse_uint64() 解析整数参数 + send_line() + send_samples() / send_attitude() 发送响应。
 void handle_command(const char* command)
 {
     // 打印命令，方便调试
@@ -161,6 +163,7 @@ void handle_command(const char* command)
         
         uint32_t request_id = 0;
         esp_err_t err = acquisition_request_calibration(request_id);
+        // 底层的函数会返回错误码（Ture/flase），这里打印日志而不是返回值。
         if (err != ESP_OK) {
             send_line("ERR CALIBRATION_REQUEST_FAILED");
             return;
@@ -252,6 +255,8 @@ void handle_command(const char* command)
     return;
 }
 
+// std::getchar() 是阻塞的，通信任务可以一直等待输入。
+// std::getchar() + handle_command() 组合可以处理一条完整命令。
 void comm_task(void* arg)
 {
     (void)arg;
@@ -261,12 +266,12 @@ void comm_task(void* arg)
     bool discarding = false;
 
     while (true) {
-        int ch = std::getchar(); // 可以从串口或标准输入读取字符，阻塞直到有输入
+        int ch = std::getchar(); // 可以从串口或标准输入读取字符
 
         // 当前没有可读字符时，让出 CPU，稍后继续。
         if (ch == EOF) {
-            std::clearerr(stdin);
-            vTaskDelay(pdMS_TO_TICKS(10));
+            std::clearerr(stdin); // 清除错误标志，避免死循环
+            vTaskDelay(pdMS_TO_TICKS(10)); // 没有数据时阻塞10ms，避免忙等待
             continue;
         }
 
@@ -275,7 +280,7 @@ void comm_task(void* arg)
             continue;
         }
 
-        // 遇到换行，才认为收到一条完整命令。
+        // 遇到换行，才认为收到一条完整命令 => 正式开始handle_command() 处理命令
         if (ch == '\n') {
             if (discarding) {
                 send_line("ERR COMMAND_TOO_LONG");
@@ -301,10 +306,10 @@ void comm_task(void* arg)
             continue;
         }
 
-        command[length++] = static_cast<char>(ch);
+        command[length++] = static_cast<char>(ch); // 拼接命令，没有换行或者结束符
     }
 }
-// 解析字符串为 uint64_t。
+// 解析字符串为 uint64_t。检查输入参数+std::strtoull()调用+错误处理。
 bool parse_uint64(const char* text, uint64_t& value) {
     if (text == nullptr || *text == '\0') { // '\0' 为空字符串
         return false;
@@ -328,17 +333,17 @@ bool parse_uint64(const char* text, uint64_t& value) {
 
 esp_err_t comm_start()
 {
-    if (comm_task_handle != nullptr) {
+    if (comm_task_handle != nullptr) { // 防止重复创建任务
         return ESP_ERR_INVALID_STATE;
     }
 
     BaseType_t result = xTaskCreate(
-        comm_task,
-        "comm_task",
-        4096,
-        nullptr,
-        4,
-        &comm_task_handle
+        comm_task, // 任务函数的入口地址
+        "comm_task", // 任务名
+        4096,  // 任务栈大小，4096字节
+        nullptr, // 入口函数的参数
+        4,  // 任务优先级
+        &comm_task_handle // 任务句柄
     );
 
     if (result != pdPASS) {

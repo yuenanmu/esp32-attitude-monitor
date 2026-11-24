@@ -12,7 +12,7 @@ struct ImuData {
 class Imu {
 public: 
     esp_err_t init(i2c_master_bus_handle_t bus_handle);
-    esp_err_t configure();
+    esp_err_t configure(); // 设置数据单位
     esp_err_t read(ImuData& data, bool& ready);
 private:
     qmi8658_dev_t imu_dev_{}; // Imu对象自动创建一个设备对象。在init中绑定，不从外传进来

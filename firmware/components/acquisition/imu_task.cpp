@@ -107,6 +107,7 @@ static esp_err_t controls_init()
     return ESP_OK;
 }
 
+// 加锁然后复制状态到 output
 esp_err_t acquisition_get_status(AcquisitionStatus& output)
 {
     if (status_mutex == nullptr) {
@@ -125,18 +126,19 @@ static esp_err_t submit_control(
     const ControlCommand& command,
     uint32_t& request_id)
 {
+    // 队列和锁没有就绪的话，直接返回错误码
     if (control_queue == nullptr || status_mutex == nullptr) {
         return ESP_ERR_INVALID_STATE;
     }
 
     xSemaphoreTake(status_mutex, portMAX_DELAY);
-
+    // 如果有命令正在处理，或者正在校准，则返回错误码
     if (acquisition_status.command_pending ||
         acquisition_status.calibrating) {
         xSemaphoreGive(status_mutex);
         return ESP_ERR_INVALID_STATE;
     }
-
+    // 非阻塞入队，如果队列满了，入队失败，就返回错误码
     if (xQueueSend(control_queue, &command, 0) != pdPASS) {
         xSemaphoreGive(status_mutex);
         return ESP_ERR_NO_MEM;
@@ -260,12 +262,7 @@ static void imu_task(void* arg)
                     ulTaskNotifyTake(pdTRUE, 0);
                 }
 
-                // TODO 7.3
-                // 在状态锁内：
-                // last_result = err
-                // command_pending = false
-                //
-                // 定时器修改失败时，rate_hz 保持原值。
+                // 更新状态锁内的 last_result 和 command_pending。
                 xSemaphoreTake(status_mutex, portMAX_DELAY);
                 acquisition_status.last_result = err; 
                 acquisition_status.command_pending = false;
@@ -288,6 +285,7 @@ static void imu_task(void* arg)
             ++stats.read_errors;
             continue;
         }
+        // 底层调用了qmi8658成功，但是，需要判断数据是否赋值到data中。
         if (!ready) {
             ++stats.not_ready;
             continue;
