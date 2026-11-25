@@ -211,7 +211,7 @@ static void imu_task(void* arg)
 
         // 等待 Timer 通知
         uint32_t notifications =
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // 等待通知
 
         if (notifications > 1) {
             ++stats.backlog_events;
@@ -258,13 +258,13 @@ static void imu_task(void* arg)
                     acquisition_status.rate_hz = command.value;
                     xSemaphoreGive(status_mutex);
 
-                    // 清除切换前已经积累的采样通知。
+                    // 清除切换前已经积累的采样通知(不需要返回值)。 但是，不等待，可能此时也已经累积了多个通知。
                     ulTaskNotifyTake(pdTRUE, 0);
                 }
 
                 // 更新状态锁内的 last_result 和 command_pending。
                 xSemaphoreTake(status_mutex, portMAX_DELAY);
-                acquisition_status.last_result = err; 
+                acquisition_status.last_result = err;  // err的值就是esp_timer_restart()的返回值！！
                 acquisition_status.command_pending = false;
                 xSemaphoreGive(status_mutex);
 
